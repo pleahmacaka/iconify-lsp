@@ -5,6 +5,7 @@ import {
   CompletionItemKind,
   createConnection,
   type InitializeParams,
+  MarkupKind,
   type Position,
   ProposedFeatures,
   TextDocumentSyncKind,
@@ -17,10 +18,16 @@ import { iconTokenAt } from "./token.ts"
 
 const COMPLETION_LIMIT = 100
 
+interface IconRef {
+  prefix: string
+  name: string
+}
+
 const connection = createConnection(ProposedFeatures.all)
 const documents = new TextDocuments(TextDocument)
 
 let store = new IconStore([], null)
+let color = "#808080"
 
 function optionString(options: unknown, key: string) {
   if (typeof options !== "object" || options === null) {
@@ -55,16 +62,36 @@ function tokenAt(uri: string, position: Position) {
   return token && store.has(token.prefix) ? token : null
 }
 
+function preview({ prefix, name }: IconRef) {
+  const svg = store.svg(prefix, name, color)
+
+  if (!svg) {
+    return null
+  }
+
+  const image = Buffer.from(svg).toString("base64")
+  const link = `https://icon-sets.iconify.design/${prefix}/${name}/`
+
+  return [
+    `![${prefix}:${name}](data:image/svg+xml;base64,${image})`,
+    `[${prefix}:${name}](${link}) from ${store.title(prefix)}`,
+  ].join("\n\n")
+}
+
 connection.onInitialize(params => {
+  const options = params.initializationOptions
+
   store = new IconStore(
     workspaceRoots(params),
-    optionString(params.initializationOptions, "iconifyJsonPath"),
+    optionString(options, "iconifyJsonPath"),
   )
+  color = optionString(options, "color") ?? color
 
   return {
     capabilities: {
       textDocumentSync: TextDocumentSyncKind.Incremental,
-      completionProvider: { triggerCharacters: [":"] },
+      completionProvider: { triggerCharacters: [":"], resolveProvider: true },
+      hoverProvider: true,
     },
     serverInfo: { name: "iconify-lsp" },
   }
@@ -104,8 +131,36 @@ connection.onCompletion(({ textDocument, position }) => {
         kind: CompletionItemKind.Value,
         detail: store.title(token.prefix),
         textEdit: { range, newText: name },
+        data: { prefix: token.prefix, name } satisfies IconRef,
       }),
     ),
+  }
+})
+
+connection.onCompletionResolve(item => {
+  const markdown = preview(item.data as IconRef)
+
+  if (markdown) {
+    item.documentation = { kind: MarkupKind.Markdown, value: markdown }
+  }
+
+  return item
+})
+
+connection.onHover(({ textDocument, position }) => {
+  const token = tokenAt(textDocument.uri, position)
+  const markdown = token && preview(token)
+
+  if (!token || !markdown) {
+    return null
+  }
+
+  return {
+    contents: { kind: MarkupKind.Markdown, value: markdown },
+    range: {
+      start: { line: position.line, character: token.start },
+      end: { line: position.line, character: token.end },
+    },
   }
 })
 
