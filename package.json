@@ -1,0 +1,39 @@
+{
+  "name": "iconify-lsp",
+  "version": "0.1.0",
+  "description": "Language server for Iconify icon names: completion and hover previews",
+  "license": "MIT",
+  "author": "PleahMaCaka <pleahmacaka@gmail.com>",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/PleahMaCaka/iconify-lsp.git"
+  },
+  "keywords": [
+    "iconify",
+    "icons",
+    "language-server",
+    "lsp"
+  ],
+  "type": "module",
+  "bin": {
+    "iconify-lsp": "dist/index.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "bun build src/index.ts --target node --outfile dist/index.js",
+    "check": "tsc",
+    "lint": "biome check .",
+    "prepublishOnly": "bun run check && bun run lint && bun run build"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^2.5.15",
+    "@iconify/types": "^2.0.0",
+    "@iconify/utils": "^3.1.7",
+    "@types/node": "^26.6.5",
+    "typescript": "^7.0.2",
+    "vscode-languageserver": "^10.1.2",
+    "vscode-languageserver-textdocument": "^1.0.15"
+  }
+}
