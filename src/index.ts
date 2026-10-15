@@ -124,18 +124,26 @@ function preview(ref: IconRef) {
 
 function referencedIcons(uri: string, name: string) {
   const bindings = bindingsFor(uri)
-  const lines: string[] = []
+  const rows: string[] = []
 
   for (const value of bindings ? stringValues(bindings, name) : []) {
     const ref = toIconRef(value)
     const picture = ref && image(ref, LIST_HEIGHT)
 
     if (ref && picture) {
-      lines.push(`${picture} ${iconLink(ref)}`)
+      rows.push(`| ${picture} | ${iconLink(ref)} |`)
     }
   }
 
-  return lines.length > 0 ? lines.slice(0, LIST_LIMIT).join("\n\n") : null
+  if (rows.length === 0) {
+    return null
+  }
+
+  return [
+    "| Icon | Name |",
+    "| :-: | --- |",
+    ...rows.slice(0, LIST_LIMIT),
+  ].join("\n")
 }
 
 function hoverResult(
