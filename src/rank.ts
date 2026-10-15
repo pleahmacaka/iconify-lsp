@@ -10,16 +10,39 @@ function isSubsequence(query: string, name: string) {
   return i === query.length
 }
 
+function matchesWords(query: string, name: string) {
+  const words = name.split("-")
+  let i = 0
+
+  for (const part of query.split("-")) {
+    while (i < words.length && !words[i]?.startsWith(part)) {
+      i++
+    }
+
+    if (i === words.length) {
+      return false
+    }
+
+    i++
+  }
+
+  return true
+}
+
 function score(query: string, name: string) {
   if (name.startsWith(query)) {
     return 0
   }
 
-  if (name.includes(query)) {
+  if (matchesWords(query, name)) {
     return 1
   }
 
-  return isSubsequence(query, name) ? 2 : null
+  if (name.includes(query)) {
+    return 2
+  }
+
+  return isSubsequence(query, name) ? 3 : null
 }
 
 export function rankNames(names: string[], query: string, limit: number) {
