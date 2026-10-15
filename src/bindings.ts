@@ -22,6 +22,8 @@ const SCRIPT_EXTENSIONS = [
 
 const MARKUP_EXTENSIONS = [".svelte", ".vue", ".html", ".astro"]
 
+const RECOVERY_ATTEMPTS = 5
+
 const TypeScriptParser = Parser.extend(tsPlugin())
 const TsxParser = Parser.extend(tsPlugin({ jsx: true }))
 
@@ -86,6 +88,59 @@ function scriptSources(path: string, text: string) {
   return sources
 }
 
+function errorPosition(error: unknown) {
+  if (
+    error instanceof SyntaxError &&
+    "pos" in error &&
+    typeof error.pos === "number"
+  ) {
+    return error.pos
+  }
+
+  return null
+}
+
+function blankLineAt(source: string, position: number) {
+  let start = source.lastIndexOf("\n", position - 1) + 1
+  let end = source.indexOf("\n", position)
+
+  if (end < 0) {
+    end = source.length
+  }
+
+  while (source.slice(start, end).trim() === "") {
+    if (start === 0) {
+      return null
+    }
+
+    end = start - 1
+    start = source.lastIndexOf("\n", end - 1) + 1
+  }
+
+  return source.slice(0, start) + " ".repeat(end - start) + source.slice(end)
+}
+
+function parseProgram(parser: typeof Parser, source: string) {
+  let attempt: string | null = source
+
+  for (let i = 0; attempt !== null && i <= RECOVERY_ATTEMPTS; i++) {
+    try {
+      const program = parser.parse(attempt, {
+        ecmaVersion: "latest",
+        sourceType: "module",
+      })
+
+      return program as unknown as TSESTree.Program
+    } catch (error) {
+      const position = errorPosition(error)
+
+      attempt = position === null ? null : blankLineAt(attempt, position)
+    }
+  }
+
+  return null
+}
+
 function parseScripts(uri: string, text: string) {
   const path = uri.toLowerCase()
   const parser =
@@ -95,14 +150,11 @@ function parseScripts(uri: string, text: string) {
   const programs: Node[] = []
 
   for (const source of scriptSources(path, text)) {
-    try {
-      const program = parser.parse(source, {
-        ecmaVersion: "latest",
-        sourceType: "module",
-      })
+    const program = parseProgram(parser, source)
 
-      programs.push(program as unknown as TSESTree.Program)
-    } catch {}
+    if (program) {
+      programs.push(program)
+    }
   }
 
   return programs
