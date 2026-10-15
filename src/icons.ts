@@ -80,7 +80,7 @@ export class IconStore {
     return names
   }
 
-  svg(prefix: string, name: string, color: string) {
+  svg(prefix: string, name: string, color: string, height: number) {
     const set = this.set(prefix)
     const data = set && getIconData(set, name)
 
@@ -88,7 +88,7 @@ export class IconStore {
       return null
     }
 
-    const { attributes, body } = iconToSVG(data, { height: 64 })
+    const { attributes, body } = iconToSVG(data, { height })
 
     return iconToHTML(replaceIDs(body), attributes).replaceAll(
       "currentColor",

@@ -12,11 +12,15 @@ import {
   TextDocuments,
 } from "vscode-languageserver/node"
 import { TextDocument } from "vscode-languageserver-textdocument"
+import { type Bindings, buildBindings, stringValues } from "./bindings.ts"
 import { IconStore } from "./icons.ts"
 import { rankNames } from "./rank.ts"
-import { iconTokenAt } from "./token.ts"
+import { iconTokenAt, identifierAt } from "./token.ts"
 
 const COMPLETION_LIMIT = 100
+const LIST_LIMIT = 12
+const PREVIEW_HEIGHT = 64
+const LIST_HEIGHT = 18
 
 interface IconRef {
   prefix: string
@@ -25,6 +29,7 @@ interface IconRef {
 
 const connection = createConnection(ProposedFeatures.all)
 const documents = new TextDocuments(TextDocument)
+const bindingCache = new Map<string, { version: number; bindings: Bindings }>()
 
 let store = new IconStore([], null)
 let color = "#808080"
@@ -46,36 +51,105 @@ function workspaceRoots(params: InitializeParams) {
     .map(uri => fileURLToPath(uri))
 }
 
+function lineAt(uri: string, position: Position) {
+  return (
+    documents.get(uri)?.getText({
+      start: { line: position.line, character: 0 },
+      end: { line: position.line + 1, character: 0 },
+    }) ?? null
+  )
+}
+
 function tokenAt(uri: string, position: Position) {
+  const line = lineAt(uri, position)
+  const token = line === null ? null : iconTokenAt(line, position.character)
+
+  return token && store.has(token.prefix) ? token : null
+}
+
+function bindingsFor(uri: string) {
   const document = documents.get(uri)
 
   if (!document) {
     return null
   }
 
-  const line = document.getText({
-    start: { line: position.line, character: 0 },
-    end: { line: position.line + 1, character: 0 },
-  })
-  const token = iconTokenAt(line, position.character)
+  const cached = bindingCache.get(uri)
 
-  return token && store.has(token.prefix) ? token : null
+  if (cached?.version === document.version) {
+    return cached.bindings
+  }
+
+  const bindings = buildBindings(uri, document.getText())
+
+  bindingCache.set(uri, { version: document.version, bindings })
+
+  return bindings
 }
 
-function preview({ prefix, name }: IconRef) {
-  const svg = store.svg(prefix, name, color)
+function toIconRef(value: string): IconRef | null {
+  const [prefix, name, ...rest] = value.split(":")
+
+  if (!prefix || !name || rest.length > 0 || !store.has(prefix)) {
+    return null
+  }
+
+  return { prefix, name }
+}
+
+function image({ prefix, name }: IconRef, height: number) {
+  const svg = store.svg(prefix, name, color, height)
 
   if (!svg) {
     return null
   }
 
-  const image = Buffer.from(svg).toString("base64")
+  const data = Buffer.from(svg).toString("base64")
+
+  return `![${prefix}:${name}](data:image/svg+xml;base64,${data})`
+}
+
+function iconLink({ prefix, name }: IconRef) {
   const link = `https://icon-sets.iconify.design/${prefix}/${name}/`
 
-  return [
-    `![${prefix}:${name}](data:image/svg+xml;base64,${image})`,
-    `[${prefix}:${name}](${link}) from ${store.title(prefix)}`,
-  ].join("\n\n")
+  return `[${prefix}:${name}](${link})`
+}
+
+function preview(ref: IconRef) {
+  const picture = image(ref, PREVIEW_HEIGHT)
+  const title = store.title(ref.prefix)
+
+  return picture ? `${picture}\n\n${iconLink(ref)} from ${title}` : null
+}
+
+function referencedIcons(uri: string, name: string) {
+  const bindings = bindingsFor(uri)
+  const lines: string[] = []
+
+  for (const value of bindings ? stringValues(bindings, name) : []) {
+    const ref = toIconRef(value)
+    const picture = ref && image(ref, LIST_HEIGHT)
+
+    if (ref && picture) {
+      lines.push(`${picture} ${iconLink(ref)}`)
+    }
+  }
+
+  return lines.length > 0 ? lines.slice(0, LIST_LIMIT).join("\n\n") : null
+}
+
+function hoverResult(
+  markdown: string,
+  line: number,
+  span: { start: number; end: number },
+) {
+  return {
+    contents: { kind: MarkupKind.Markdown, value: markdown },
+    range: {
+      start: { line, character: span.start },
+      end: { line, character: span.end },
+    },
+  }
 }
 
 connection.onInitialize(params => {
@@ -149,19 +223,27 @@ connection.onCompletionResolve(item => {
 
 connection.onHover(({ textDocument, position }) => {
   const token = tokenAt(textDocument.uri, position)
-  const markdown = token && preview(token)
 
-  if (!token || !markdown) {
+  if (token) {
+    const markdown = preview(token)
+
+    return markdown ? hoverResult(markdown, position.line, token) : null
+  }
+
+  const line = lineAt(textDocument.uri, position)
+  const identifier =
+    line === null ? null : identifierAt(line, position.character)
+  const table = identifier && referencedIcons(textDocument.uri, identifier.text)
+
+  if (!identifier || !table) {
     return null
   }
 
-  return {
-    contents: { kind: MarkupKind.Markdown, value: markdown },
-    range: {
-      start: { line: position.line, character: token.start },
-      end: { line: position.line, character: token.end },
-    },
-  }
+  return hoverResult(table, position.line, identifier)
+})
+
+documents.onDidClose(e => {
+  bindingCache.delete(e.document.uri)
 })
 
 documents.listen(connection)
