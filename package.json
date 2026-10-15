@@ -16,13 +16,13 @@
   ],
   "type": "module",
   "bin": {
-    "iconify-lsp": "dist/index.js"
+    "iconify-lsp": "dist/server.js"
   },
   "files": [
     "dist"
   ],
   "scripts": {
-    "build": "bun build src/index.ts --target node --outfile dist/index.js",
+    "build": "bun build src/index.ts --target node --outfile dist/server.js",
     "check": "tsc",
     "lint": "biome check .",
     "prepublishOnly": "bun run check && bun run lint && bun run build"
