@@ -8,10 +8,11 @@ A language server for [Iconify](https://iconify.design/) icon names.
 
 ## Usage
 
-Download the server script from the [latest release](https://github.com/PleahMaCaka/iconify-lsp/releases/latest) and run it with Node.js:
+Install from npm and run it over stdio:
 
 ```sh
-node server.js --stdio
+npm install -g iconify-lsp
+iconify-lsp --stdio
 ```
 
 For Zed, install the [Iconify extension](https://github.com/PleahMaCaka/zed-iconify-lsp) instead.
@@ -26,10 +27,10 @@ Icon sets are read from, in order:
 
 ## Initialization options
 
-| Option            | Description                                  | Default   |
-| ----------------- | -------------------------------------------- | --------- |
-| `iconifyJsonPath` | Path to an `@iconify/json` directory          | none      |
-| `color`           | Color of monochrome icons in previews         | `#808080` |
+| Option            | Description                           | Default   |
+| ----------------- | ------------------------------------- | --------- |
+| `iconifyJsonPath` | Path to an `@iconify/json` directory  | none      |
+| `color`           | Color of monochrome icons in previews | `#808080` |
 
 ## Development
 
